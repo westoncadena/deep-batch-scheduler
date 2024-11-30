@@ -144,7 +144,7 @@ class PPOBuffer:
     """
 
     def __init__(self, obs_dim, act_dim, size, gamma=0.99, lam=0.95):
-        size = size * 100 # assume the traj can be really long
+        size = size * 10 # assume the traj can be really long
         self.obs_buf = np.zeros(combined_shape(size, obs_dim), dtype=np.float32)
        # self.cobs_buf = np.zeros(combined_shape(size, JOB_SEQUENCE_SIZE*3), dtype=np.float32)
         self.cobs_buf = None
@@ -460,7 +460,7 @@ if __name__ == '__main__':
     parser.add_argument('--seed', '-s', type=int, default=0)
     parser.add_argument('--cpu', type=int, default=1)
     parser.add_argument('--trajs', type=int, default=100)
-    parser.add_argument('--epochs', type=int, default=4000)
+    parser.add_argument('--epochs', type=int, default=50)
     parser.add_argument('--exp_name', type=str, default='ppo')
     parser.add_argument('--pre_trained', type=int, default=0)
     parser.add_argument('--trained_model', type=str, default='./data/logs/ppo_temp/ppo_temp_s0')
