@@ -1,8 +1,14 @@
-# deep-batch-scheduler
+# deep-batch-scheduler - CSCE 642 Final Project Implementation
 This repo includes the deep batch scheduler source code, necessary datasets to run the experiments/tests, and our own implemnation of N-step DQN and A2C algorithms. 
 
 The code has been tested on Ubuntu 18.04/16.04 with Tensorflow 1.14 and SpinningUp 0.2. Newer version of Tensorflow (such as 2.x) does not work because of the new APIs. Windows 10 should be OK to run the code, only the installation of the dependencies (such as Gym environment and SpinningUp could be bumpy).
 
+below is a guide of how to install and and use this repository. To train with different models, use these files interchangably in the examples
+```bash
+ppo-picks-jobs.py
+a2c-picks-jobs.py
+dqn-n-steps-picks-jobs.py
+```
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.4009286.svg)](https://doi.org/10.5281/zenodo.4009286)
 
 ## Installation
