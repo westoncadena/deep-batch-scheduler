@@ -121,29 +121,6 @@ In this scheduling case, we randomly select 10 job sequences using `seed=1`. It 
 </figure>
 We use the average to produce the performance tables in the paper.
 
-## Reproduce Results in Paper
-
-We provide the script and several trained models to help reproduce the key results shown in the paper, particularly Table V and Table VI. 
-
-### Results of Scheduling Towards average bounded slowdown
-```shell script
-python make_table_script.py --score_type "bsld"
-```
-
-| Trace               | FCFS    | WFP3     | UNI      | SJF     | F1      | RL     |
-|---------------------|---------|----------|----------|---------|---------|--------|
-| Without backfilling |         |          |          |         |         |        |
-| Lublin-1            | 7273.77 | 19753.53 | 22274.74 | 277.35  | 258.37  | **254.67** |
-| SDSC-SP2            | 1727.54 | 3000.88  | 1848.45  | 2680.55 | 1232.06 | **466.44** |
-| HPC2N               | 297.18  | 426.99   | 609.77   | 157.71  | 118.01  | **117.01** |
-| Lublin-2            | 7842.47 | 9523.18  | 11265.31 | 787.89  | **698.34**  | 724.51 |
-| With backfilling    |         |          |          |         |         |        |
-| Lublin-1            | 235.82  | 133.87   | 307.23   | 73.31   | 75.07   | **58.64**  |
-| SDSC-SP2            | 1595.12 | 1083.12  | 548.01   | 2167.84 | 1098.22 | **397.82** |
-| HPC2N               | 127.38  | 97.39    | 175.12   | 122.04  | **71.95**   | 86.14  |
-| Lublin-2            | 247.61  | 318.35   | 379.59   | **91.99**   | 148.25  | 118.79 |
-
-
 ## Citing RLScheduler
 The relevant research paper has been published at SC20. If you reference or use RLScheduler in your research, please cite:
 
