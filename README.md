@@ -1,23 +1,9 @@
 # deep-batch-scheduler
-This repo includes the deep batch scheduler source code and necessary datasets to run the experiments/tests. 
+This repo includes the deep batch scheduler source code, necessary datasets to run the experiments/tests, and our own implemnation of N-step DQN and A2C algorithms. 
 
 The code has been tested on Ubuntu 18.04/16.04 with Tensorflow 1.14 and SpinningUp 0.2. Newer version of Tensorflow (such as 2.x) does not work because of the new APIs. Windows 10 should be OK to run the code, only the installation of the dependencies (such as Gym environment and SpinningUp could be bumpy).
 
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.4009286.svg)](https://doi.org/10.5281/zenodo.4009286)
-
-## Citing RLScheduler
-The relevant research paper has been published at SC20. If you reference or use RLScheduler in your research, please cite:
-
-```
-@inproceedings{zhang2020rlscheduler,
-  title={RLScheduler: an automated HPC batch job scheduler using reinforcement learning},
-  author={Zhang, Di and Dai, Dong and He, Youbiao and Bao, Forrest Sheng and Xie, Bing},
-  booktitle={SC20: International Conference for High Performance Computing, Networking, Storage and Analysis},
-  pages={1--15},
-  year={2020},
-  organization={IEEE}
-}
-```
 
 ## Installation
 
@@ -151,24 +137,20 @@ python make_table_script.py --score_type "bsld"
 | HPC2N               | 127.38  | 97.39    | 175.12   | 122.04  | **71.95**   | 86.14  |
 | Lublin-2            | 247.61  | 318.35   | 379.59   | **91.99**   | 148.25  | 118.79 |
 
-### Results of Scheduling Towards resource utilization
-```shell script
-python make_table_script.py --score_type "utilization"
+
+## Citing RLScheduler
+The relevant research paper has been published at SC20. If you reference or use RLScheduler in your research, please cite:
+
 ```
-
-| Trace               | FCFS  | WFP3  | UNI   | SJF   | F1    | RL    |
-|---------------------|-------|-------|-------|-------|-------|-------|
-| Without backfilling |       |       |       |       |       |       |
-| Lublin-1            | 0.657 | 0.747 | 0.691 | 0.762 | **0.816** | 0.714 |
-| SDSC-SP2            | 0.670 | 0.658 | **0.688** | 0.645 | 0.674 | 0.671 |
-| HPC2N               | 0.638 | 0.636 | 0.636 | 0.640 | 0.637 | **0.640** |
-| Lublin-2            | 0.404 | 0.543 | 0.510 | 0.562 | 0.478 | **0.562** |
-| With backfilling    |       |       |       |       |       |       |
-| Lublin-1            | 0.868 | 0.864 | **0.883** | 0.778 | 0.840 | 0.850 |
-| SDSC-SP2            | 0.682 | 0.681 | 0.706 | 0.661 | 0.677 | **0.707** |
-| HPC2N               | 0.639 | 0.637 | 0.638 | 0.641 | 0.638 | **0.642** |
-| Lublin-2            | 0.587 | 0.583 | 0.587 | 0.593 | 0.552 | **0.593** |
-
+@inproceedings{zhang2020rlscheduler,
+  title={RLScheduler: an automated HPC batch job scheduler using reinforcement learning},
+  author={Zhang, Di and Dai, Dong and He, Youbiao and Bao, Forrest Sheng and Xie, Bing},
+  booktitle={SC20: International Conference for High Performance Computing, Networking, Storage and Analysis},
+  pages={1--15},
+  year={2020},
+  organization={IEEE}
+}
+```
 
 ## Fairness
 
