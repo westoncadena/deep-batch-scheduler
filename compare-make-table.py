@@ -75,12 +75,10 @@ def run_policy(env, get_probs, get_out, nums, iters, score_type):
         start = iter_num * args.len
         env.reset_for_test(nums, start)
         f1_r.append(sum(env.schedule_curr_sequence_reset(env.f1_score).values()))
-        # f2_r.append(sum(env.schedule_curr_sequence_reset(env.f2_score).values()))
         uni_r.append(sum(env.schedule_curr_sequence_reset(env.uni_score).values()))
         wfp_r.append(sum(env.schedule_curr_sequence_reset(env.wfp_score).values()))
 
         sjf_r.append(sum(env.schedule_curr_sequence_reset(env.sjf_score).values()))
-        # small_r.append(sum(env.schedule_curr_sequence_reset(env.smallest_score).values()))
         fcfs_r.append(sum(env.schedule_curr_sequence_reset(env.fcfs_score).values()))
 
         o = env.build_observation()

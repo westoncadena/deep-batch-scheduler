@@ -76,7 +76,7 @@ def rl_kernel(x, act_dim):
 
 def attention(x, act_dim):
     x = tf.reshape(x, shape=[-1, MAX_QUEUE_SIZE, JOB_FEATURES])
-    # x = tf.layers.dense(x, units=32, activation=tf.nn.relu)
+
     q = tf.layers.dense(x, units=32, activation=tf.nn.relu)
     k = tf.layers.dense(x, units=32, activation=tf.nn.relu)
     v = tf.layers.dense(x, units=32, activation=tf.nn.relu)
@@ -88,9 +88,7 @@ def attention(x, act_dim):
 
     x = tf.layers.dense(x, units=8, activation=tf.nn.relu)
     x = tf.squeeze(tf.layers.dense(x, units=1), axis=-1)
-    # x = tf.layers.dense(x, units=128, activation=tf.nn.relu)
-    # x = tf.layers.dense(x, units=64, activation=tf.nn.relu)
-    # x = tf.layers.dense(x, units=64, activation=tf.nn.relu)
+
     return x
 
 def lenet(x_ph, act_dim):
@@ -136,17 +134,16 @@ def actor_critic(x, a, mask, action_space=None, attn=False):
         v = tf.squeeze(critic_mlp(x, 1), axis=1)
     return pi, logp, logp_pi, v, out
 
-class PPOBuffer:
+class A2CBuffer:
     """
-    A buffer for storing trajectories experienced by a PPO agent interacting
+    A buffer for storing trajectories experienced by a A2C agent interacting
     with the environment, and using Generalized Advantage Estimation (GAE-Lambda)
     for calculating the advantages of state-action pairs.
     """
 
-    def __init__(self, obs_dim, act_dim, size, gamma=0.99, lam=0.95):
+    def __init__(self, obs_dim, act_dim, size, gamma=0.99):
         size = size * 10 # assume the traj can be really long
         self.obs_buf = np.zeros(combined_shape(size, obs_dim), dtype=np.float32)
-       # self.cobs_buf = np.zeros(combined_shape(size, JOB_SEQUENCE_SIZE*3), dtype=np.float32)
         self.cobs_buf = None
         self.act_buf = np.zeros(combined_shape(size, act_dim), dtype=np.float32)
         self.mask_buf = np.zeros(combined_shape(size, MAX_QUEUE_SIZE), dtype=np.float32)
@@ -155,7 +152,7 @@ class PPOBuffer:
         self.ret_buf = np.zeros(size, dtype=np.float32)
         self.val_buf = np.zeros(size, dtype=np.float32)
         self.logp_buf = np.zeros(size, dtype=np.float32)
-        self.gamma, self.lam = gamma, lam
+        self.gamma = gamma
         self.ptr, self.path_start_idx, self.max_size = 0, 0, size
 
     def store(self, obs, cobs, act, mask, rew, val, logp):
@@ -164,7 +161,6 @@ class PPOBuffer:
         """
         assert self.ptr < self.max_size     # buffer has to have room so you can store
         self.obs_buf[self.ptr] = obs
-       # self.cobs_buf[self.ptr] = cobs
         self.act_buf[self.ptr] = act
         self.mask_buf[self.ptr] = mask
         self.rew_buf[self.ptr] = rew
@@ -192,12 +188,11 @@ class PPOBuffer:
         rews = np.append(self.rew_buf[path_slice], last_val)
         vals = np.append(self.val_buf[path_slice], last_val)
         
-        # the next two lines implement GAE-Lambda advantage calculation
-        deltas = rews[:-1] + self.gamma * vals[1:] - vals[:-1]
-        self.adv_buf[path_slice] = discount_cumsum(deltas, self.gamma * self.lam)
-        
-        # the next line computes rewards-to-go, to be targets for the value function
+        # Compute rewards-to-go, to be targets for the value function
         self.ret_buf[path_slice] = discount_cumsum(rews, self.gamma)[:-1]
+        
+        # Compute advantage: adv = ret - value
+        self.adv_buf[path_slice] = self.ret_buf[path_slice] - self.val_buf[path_slice]
         
         self.path_start_idx = self.ptr
 
@@ -213,30 +208,27 @@ class PPOBuffer:
 
         actual_adv_buf = np.array(self.adv_buf, dtype = np.float32)
         actual_adv_buf = actual_adv_buf[:actual_size]
-        # print ("-----------------------> actual_adv_buf: ", actual_adv_buf)
         adv_sum = np.sum(actual_adv_buf)
         adv_n = len(actual_adv_buf)
         adv_mean = adv_sum / adv_n
         adv_sum_sq = np.sum((actual_adv_buf - adv_mean) ** 2)
         adv_std = np.sqrt(adv_sum_sq / adv_n)
-        # print ("-----------------------> adv_std:", adv_std)
+
         actual_adv_buf = (actual_adv_buf - adv_mean) / adv_std
-        # print (actual_adv_buf)
+
 
         return [self.obs_buf[:actual_size],  self.act_buf[:actual_size], self.mask_buf[:actual_size], actual_adv_buf,
                 self.ret_buf[:actual_size], self.logp_buf[:actual_size]]
 
 """
 
-Proximal Policy Optimization (by clipping), 
-
-with early stopping based on approximate KL
+A2C 
 
 """
-def ppo(workload_file, model_path, ac_kwargs=dict(), seed=0, 
-        traj_per_epoch=4000, epochs=50, gamma=0.99, clip_ratio=0.2, pi_lr=3e-4,
-        vf_lr=1e-3, train_pi_iters=80, train_v_iters=80, lam=0.97, max_ep_len=1000,
-        target_kl=0.01, logger_kwargs=dict(), save_freq=10,pre_trained=0,trained_model=None,attn=False,shuffle=False,
+def a2c(workload_file, model_path, ac_kwargs=dict(), seed=0, 
+        traj_per_epoch=4000, epochs=50, gamma=0.99, pi_lr=3e-4,
+        vf_lr=1e-3, train_pi_iters=80, train_v_iters=80, lam=0.97, max_ep_len=1000, 
+        logger_kwargs=dict(), save_freq=10,pre_trained=0,trained_model=None,attn=False,shuffle=False,
         backfil=False, skip=False, score_type=0, batch_job_slice=0):
 
     logger = EpochLogger(**logger_kwargs)
@@ -258,7 +250,7 @@ def ppo(workload_file, model_path, ac_kwargs=dict(), seed=0,
 
     # Inputs to computation graph
 
-    buf = PPOBuffer(obs_dim, act_dim, traj_per_epoch * JOB_SEQUENCE_SIZE, gamma, lam)
+    buf = A2CBuffer(obs_dim, act_dim, traj_per_epoch * JOB_SEQUENCE_SIZE, gamma)
 
     if pre_trained:
         sess = tf.Session()
@@ -283,26 +275,9 @@ def ppo(workload_file, model_path, ac_kwargs=dict(), seed=0,
         logp_pi = model['logp_pi']
         pi_loss = model['pi_loss']
         v_loss = model['v_loss']
-        approx_ent = model['approx_ent']
-        approx_kl = model['approx_kl']
-        clipfrac = model['clipfrac']
-        clipped = model['clipped']
 
-        # Optimizers
-        #graph = tf.get_default_graph()
-        #op = sess.graph.get_operations()
-        #[print(m.values()) for m in op]
-        #train_pi = graph.get_tensor_by_name('pi/conv2d/kernel/Adam:0')
-        #train_v = graph.get_tensor_by_name('v/conv2d/kernel/Adam:0')
         train_pi = tf.get_collection("train_pi")[0]
         train_v = tf.get_collection("train_v")[0]
-        # train_pi_optimizer = MpiAdamOptimizer(learning_rate=pi_lr, name='AdamLoad')
-        # train_pi = train_pi_optimizer.minimize(pi_loss)
-        # train_v_optimizer = MpiAdamOptimizer(learning_rate=vf_lr, name='AdamLoad')
-        # train_v = train_v_optimizer.minimize(v_loss)
-        # sess.run(tf.variables_initializer(train_pi_optimizer.variables()))
-        # sess.run(tf.variables_initializer(train_v_optimizer.variables()))
-        # Need all placeholders in *this* order later (to zip with data from buffer)
         all_phs = [x_ph, a_ph, mask_ph, adv_ph, ret_ph, logp_old_ph]
         # Every step, get: action, value, and logprob
         get_action_ops = [pi, v, logp_pi, out]
@@ -328,17 +303,9 @@ def ppo(workload_file, model_path, ac_kwargs=dict(), seed=0,
         var_counts = tuple(count_vars(scope) for scope in ['pi', 'v'])
         logger.log('\nNumber of parameters: \t pi: %d, \t v: %d\n' % var_counts)
 
-        # PPO objectives
-        ratio = tf.exp(logp - logp_old_ph)  # pi(a|s) / pi_old(a|s)
-        min_adv = tf.where(adv_ph > 0, (1 + clip_ratio) * adv_ph, (1 - clip_ratio) * adv_ph)
-        pi_loss = -tf.reduce_mean(tf.minimum(ratio * adv_ph, min_adv))
+        # A2C objectives
+        pi_loss = -tf.reduce_mean(adv_ph * logp)  # Simple advantage-weighted loss
         v_loss = tf.reduce_mean((ret_ph - v) ** 2)
-
-        # Info (useful to watch during learning)
-        approx_kl = tf.reduce_mean(logp_old_ph - logp)  # a sample estimate for KL-divergence, easy to compute
-        approx_ent = tf.reduce_mean(-logp)  # a sample estimate for entropy, also easy to compute
-        clipped = tf.logical_or(ratio > (1 + clip_ratio), ratio < (1 - clip_ratio))
-        clipfrac = tf.reduce_mean(tf.cast(clipped, tf.float32))
 
         # Optimizers
         train_pi = tf.train.AdamOptimizer(learning_rate=pi_lr).minimize(pi_loss)
@@ -350,30 +317,25 @@ def ppo(workload_file, model_path, ac_kwargs=dict(), seed=0,
 
 
     # Setup model saving
-    # logger.setup_tf_saver(sess, inputs={'x': x_ph}, outputs={'action_probs': action_probs, 'log_picked_action_prob': log_picked_action_prob, 'v': v})
-    logger.setup_tf_saver(sess, inputs={'x': x_ph, 'a':a_ph, 'adv':adv_ph, 'mask':mask_ph, 'ret':ret_ph, 'logp_old_ph':logp_old_ph}, outputs={'pi': pi, 'v': v, 'out':out, 'pi_loss':pi_loss, 'logp': logp, 'logp_pi':logp_pi, 'v_loss':v_loss, 'approx_ent':approx_ent, 'approx_kl':approx_kl, 'clipped':clipped, 'clipfrac':clipfrac})
+    logger.setup_tf_saver(sess, inputs={'x': x_ph, 'a':a_ph, 'adv':adv_ph, 'mask':mask_ph, 'ret':ret_ph, 'logp_old_ph':logp_old_ph}, outputs={'pi': pi, 'v': v, 'out':out, 'pi_loss':pi_loss, 'logp': logp, 'logp_pi':logp_pi, 'v_loss':v_loss})
 
     def update():
         inputs = {k:v for k,v in zip(all_phs, buf.get())}
         for ph, data in inputs.items():
             print(f"{ph.name}: {data.shape}")
-        pi_l_old, v_l_old, ent = sess.run([pi_loss, v_loss, approx_ent], feed_dict=inputs)
+        pi_l_old, v_l_old = sess.run([pi_loss, v_loss], feed_dict=inputs)
 
         # Training
         for i in range(train_pi_iters):
-            _, kl = sess.run([train_pi, approx_kl], feed_dict=inputs)
-            kl = mpi_avg(kl)
-            if kl > 1.5 * target_kl:
-                logger.log('Early stopping at step %d due to reaching max kl.'%i)
-                break
+            _ = sess.run(train_pi, feed_dict=inputs)
+            
         logger.store(StopIter=i)
         for _ in range(train_v_iters):
             sess.run(train_v, feed_dict=inputs)
 
         # Log changes from update
-        pi_l_new, v_l_new, kl, cf = sess.run([pi_loss, v_loss, approx_kl, clipfrac], feed_dict=inputs)
+        pi_l_new, v_l_new = sess.run([pi_loss, v_loss], feed_dict=inputs)
         logger.store(LossPi=pi_l_old, LossV=v_l_old,
-                     KL=kl, Entropy=ent, ClipFrac=cf,
                      DeltaLossPi=(pi_l_new - pi_l_old),
                      DeltaLossV=(v_l_new - v_l_old))
 
@@ -422,7 +384,8 @@ def ppo(workload_file, model_path, ac_kwargs=dict(), seed=0,
             if d:
                 t += 1
                 buf.finish_path(r)
-                print(f"    Trajectory {t} - steps = {steps_per_traj}")
+                if t % 50 == 0:
+                    print(f"    Trajectory {t} - steps = {steps_per_traj}")
                 logger.store(EpRet=ep_ret, EpLen=ep_len, ShowRet=show_ret, SJF=sjf, F1=f1)
                 [o, co], r, d, ep_ret, ep_len, show_ret, sjf, f1 = env.reset(), 0, False, 0, 0, 0, 0, 0
                 steps_per_traj = 0
@@ -434,10 +397,11 @@ def ppo(workload_file, model_path, ac_kwargs=dict(), seed=0,
         if (epoch % save_freq == 0) or (epoch == epochs-1):
             logger.save_state({'env': env}, None)
 
-        # Perform PPO update!
+        # Perform A2C update!
         # start_time = time.time()
         update()
         # print("Train time:", time.time()-start_time)
+        
 
         # Log info about epoch
         logger.log_tabular('Epoch', epoch)
@@ -449,9 +413,6 @@ def ppo(workload_file, model_path, ac_kwargs=dict(), seed=0,
         logger.log_tabular('LossV', average_only=True)
         logger.log_tabular('DeltaLossPi', average_only=True)
         logger.log_tabular('DeltaLossV', average_only=True)
-        logger.log_tabular('Entropy', average_only=True)
-        logger.log_tabular('KL', average_only=True)
-        logger.log_tabular('ClipFrac', average_only=True)
         logger.log_tabular('StopIter', average_only=True)
         logger.log_tabular('ShowRet', average_only=True)
         logger.log_tabular('SJF', average_only=True)
@@ -469,9 +430,9 @@ if __name__ == '__main__':
     parser.add_argument('--cpu', type=int, default=1)
     parser.add_argument('--trajs', type=int, default=100)
     parser.add_argument('--epochs', type=int, default=50)
-    parser.add_argument('--exp_name', type=str, default='ppo')
+    parser.add_argument('--exp_name', type=str, default='a2c')
     parser.add_argument('--pre_trained', type=int, default=0)
-    parser.add_argument('--trained_model', type=str, default='./data/logs/ppo_temp/ppo_temp_s0')
+    parser.add_argument('--trained_model', type=str, default='./data/logs/a2c_temp/a2c_temp_s0')
     parser.add_argument('--attn', type=int, default=0)
     parser.add_argument('--shuffle', type=int, default=0)
     parser.add_argument('--backfil', type=int, default=0)
@@ -491,11 +452,11 @@ if __name__ == '__main__':
         model_file = os.path.join(current_dir, args.trained_model)
         # get_probs, get_value = load_policy(model_file, 'last')
 
-        ppo(workload_file, args.model, gamma=args.gamma, seed=args.seed, traj_per_epoch=args.trajs, epochs=args.epochs,
+        a2c(workload_file, args.model, gamma=args.gamma, seed=args.seed, traj_per_epoch=args.trajs, epochs=args.epochs,
         logger_kwargs=logger_kwargs, pre_trained=1,trained_model=os.path.join(model_file,"simple_save"),attn=args.attn,
             shuffle=args.shuffle, backfil=args.backfil, skip=args.skip, score_type=args.score_type,
             batch_job_slice=args.batch_job_slice)
     else:
-        ppo(workload_file, args.model, gamma=args.gamma, seed=args.seed, traj_per_epoch=args.trajs, epochs=args.epochs,
+        a2c(workload_file, args.model, gamma=args.gamma, seed=args.seed, traj_per_epoch=args.trajs, epochs=args.epochs,
         logger_kwargs=logger_kwargs, pre_trained=0, attn=args.attn,shuffle=args.shuffle, backfil=args.backfil,
             skip=args.skip, score_type=args.score_type, batch_job_slice=args.batch_job_slice)
